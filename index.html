@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="utf-8">
-    <title>Globe Rotation with D3.js</title>
+    <title>Globe Rotation with D3.js BUI HUU ANH TU</title>
     <script src="https://d3js.org/d3.v3.min.js"></script>
     <script src="https://d3js.org/queue.v1.min.js"></script>
     <script src="https://d3js.org/topojson.v1.min.js"></script>
@@ -45,42 +45,65 @@ var title = d3.select("h1");
 
 queue()
     .defer(d3.json, "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")  // File bản đồ
-    .defer(d3.tsv, "countries1.json") // File tên quốc gia
+    .defer(d3.tsv, "https://raw.githubusercontent.com/24621154/Google/refs/heads/main/countries.tsv") // File tên quốc gia
     .await(ready);
 
 function ready(error, world, names) {
     if (error) throw error;
 
     var globe = {type: "Sphere"},
-        countries = topojson.feature(world, world.objects.countries).features,  // Chuyển đổi từ TopoJSON
+        countries = topojson.feature(world, world.objects.countries).features,  
         borders = topojson.mesh(world, world.objects.countries, function(a, b) { return a !== b; }),
         i = -1,
-        n = countries.length;
+        n = countries.length,
+        prevCountry = null;
 
-    // Gán tên quốc gia dựa trên ID từ file TSV
     countries.forEach(function(d) {
         var match = names.find(n => n.id == d.id);
         if (match) d.name = match.name;
     });
 
+    countries = countries.filter(d => d.name); 
     countries.sort((a, b) => a.name.localeCompare(b.name));
+
+    function drawMovingConnection(fromCountry, toCountry, progress) {
+        if (!fromCountry || !toCountry) return;
+
+        var from = d3.geo.centroid(fromCountry),
+            to = d3.geo.centroid(toCountry);
+
+        var midX = from[0] + (to[0] - from[0]) * progress;
+        var midY = from[1] + (to[1] - from[1]) * progress;
+        var arc = { type: "LineString", coordinates: [from, [midX, midY]] };
+
+        c.beginPath();
+        c.strokeStyle = "black";
+        c.lineWidth = 3;
+        path(arc);
+        c.stroke();
+    }
 
     (function transition() {
         d3.transition()
-            .duration(1250)
+            .duration(2000)
             .each("start", function() {
+                prevCountry = countries[i]; 
                 title.text(countries[i = (i + 1) % n].name);
             })
             .tween("rotate", function() {
-                var p = d3.geo.centroid(countries[i]),
+                var currentCountry = countries[i];
+                var p = d3.geo.centroid(currentCountry),
                     r = d3.interpolate(projection.rotate(), [-p[0], -p[1]]);
+
                 return function(t) {
                     projection.rotate(r(t));
                     c.clearRect(0, 0, width, height);
                     c.fillStyle = "#ccc", c.beginPath(), path({type: "FeatureCollection", features: countries}), c.fill();
-                    c.fillStyle = "#f00", c.beginPath(), path(countries[i]), c.fill();
+                    c.fillStyle = "#f00", c.beginPath(), path(currentCountry), c.fill();
                     c.strokeStyle = "#fff", c.lineWidth = 0.5, c.beginPath(), path(borders), c.stroke();
                     c.strokeStyle = "#000", c.lineWidth = 2, c.beginPath(), path(globe), c.stroke();
+
+                    drawMovingConnection(prevCountry, currentCountry, t);
                 };
             })
         .transition()
