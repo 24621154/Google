@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Globe Rotation with D3.js</title>
+    <script src="https://d3js.org/d3.v3.min.js"></script>
+    <script src="https://d3js.org/queue.v1.min.js"></script>
+    <script src="https://d3js.org/topojson.v1.min.js"></script>
+    <style>
+        h1 {
+            position: absolute;
+            top: 500px;
+            font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+            font-size: 18px;
+            text-align: center;
+            width: 960px;
+        }
+    </style>
+</head>
+<body>
+
+<h1></h1>
+
+<script>
+var width = 960,
+    height = 960;
+
+var projection = d3.geo.orthographic()
+    .translate([width / 2, height / 2])
+    .scale(width / 2 - 20)
+    .clipAngle(90)
+    .precision(0.6);
+
+var canvas = d3.select("body").append("canvas")
+    .attr("width", width)
+    .attr("height", height);
+
+var c = canvas.node().getContext("2d");
+
+var path = d3.geo.path()
+    .projection(projection)
+    .context(c);
+
+var title = d3.select("h1");
+
+queue()
+    .defer(d3.json, "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json")  // File bản đồ
+    .defer(d3.tsv, "countries1.json") // File tên quốc gia
+    .await(ready);
+
+function ready(error, world, names) {
+    if (error) throw error;
+
+    var globe = {type: "Sphere"},
+        countries = topojson.feature(world, world.objects.countries).features,  // Chuyển đổi từ TopoJSON
+        borders = topojson.mesh(world, world.objects.countries, function(a, b) { return a !== b; }),
+        i = -1,
+        n = countries.length;
+
+    // Gán tên quốc gia dựa trên ID từ file TSV
+    countries.forEach(function(d) {
+        var match = names.find(n => n.id == d.id);
+        if (match) d.name = match.name;
+    });
+
+    countries.sort((a, b) => a.name.localeCompare(b.name));
+
+    (function transition() {
+        d3.transition()
+            .duration(1250)
+            .each("start", function() {
+                title.text(countries[i = (i + 1) % n].name);
+            })
+            .tween("rotate", function() {
+                var p = d3.geo.centroid(countries[i]),
+                    r = d3.interpolate(projection.rotate(), [-p[0], -p[1]]);
+                return function(t) {
+                    projection.rotate(r(t));
+                    c.clearRect(0, 0, width, height);
+                    c.fillStyle = "#ccc", c.beginPath(), path({type: "FeatureCollection", features: countries}), c.fill();
+                    c.fillStyle = "#f00", c.beginPath(), path(countries[i]), c.fill();
+                    c.strokeStyle = "#fff", c.lineWidth = 0.5, c.beginPath(), path(borders), c.stroke();
+                    c.strokeStyle = "#000", c.lineWidth = 2, c.beginPath(), path(globe), c.stroke();
+                };
+            })
+        .transition()
+            .each("end", transition);
+    })();
+}
+
+d3.select(self.frameElement).style("height", height + "px");
+
+</script>
+
+</body>
+</html>
